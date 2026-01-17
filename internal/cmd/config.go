@@ -63,8 +63,6 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Client ID:       %s\n", maskIfLong(cfg.ClientID, 20))
 	fmt.Printf("Current Account: %s\n", valueOrNone(cfg.CurrentAccount))
 	fmt.Printf("Active Account:  %s\n", valueOrNone(getActiveAccount()))
-	fmt.Printf("IMAP Server:     %s:%d\n", cfg.IMAPServer, cfg.IMAPPort)
-	fmt.Printf("SMTP Server:     %s:%d\n", cfg.SMTPServer, cfg.SMTPPort)
 	fmt.Printf("Cache Dir:       %s\n", cfg.CacheDir)
 	fmt.Printf("Debug:           %v\n", cfg.Debug)
 

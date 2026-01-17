@@ -20,10 +20,6 @@ const (
 type Config struct {
 	ClientID       string `mapstructure:"client_id"`
 	CurrentAccount string `mapstructure:"current_account"`
-	IMAPServer     string `mapstructure:"imap_server"`
-	IMAPPort       int    `mapstructure:"imap_port"`
-	SMTPServer     string `mapstructure:"smtp_server"`
-	SMTPPort       int    `mapstructure:"smtp_port"`
 	CacheDir       string `mapstructure:"cache_dir"`
 	Debug          bool   `mapstructure:"debug"`
 }
@@ -44,13 +40,9 @@ type AccountList struct {
 func DefaultConfig() *Config {
 	home, _ := os.UserHomeDir()
 	return &Config{
-		ClientID:   "5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd",
-		IMAPServer: "outlook.office365.com",
-		IMAPPort:   993,
-		SMTPServer: "smtp.office365.com",
-		SMTPPort:   587,
-		CacheDir:   filepath.Join(home, ConfigDirName),
-		Debug:      false,
+		ClientID: "5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd",
+		CacheDir: filepath.Join(home, ConfigDirName),
+		Debug:    false,
 	}
 }
 
@@ -79,10 +71,6 @@ func Load() (*Config, error) {
 	// Set defaults
 	viper.SetDefault("client_id", cfg.ClientID)
 	viper.SetDefault("current_account", cfg.CurrentAccount)
-	viper.SetDefault("imap_server", cfg.IMAPServer)
-	viper.SetDefault("imap_port", cfg.IMAPPort)
-	viper.SetDefault("smtp_server", cfg.SMTPServer)
-	viper.SetDefault("smtp_port", cfg.SMTPPort)
 	viper.SetDefault("cache_dir", cfg.CacheDir)
 	viper.SetDefault("debug", cfg.Debug)
 
@@ -119,10 +107,6 @@ func Save(cfg *Config) error {
 	// Set values
 	viper.Set("client_id", cfg.ClientID)
 	viper.Set("current_account", cfg.CurrentAccount)
-	viper.Set("imap_server", cfg.IMAPServer)
-	viper.Set("imap_port", cfg.IMAPPort)
-	viper.Set("smtp_server", cfg.SMTPServer)
-	viper.Set("smtp_port", cfg.SMTPPort)
 	viper.Set("cache_dir", cfg.CacheDir)
 	viper.Set("debug", cfg.Debug)
 
@@ -153,10 +137,6 @@ func SetValue(key, value string) error {
 		cfg.ClientID = value
 	case "current_account":
 		cfg.CurrentAccount = value
-	case "imap_server":
-		cfg.IMAPServer = value
-	case "smtp_server":
-		cfg.SMTPServer = value
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -176,10 +156,6 @@ func GetValue(key string) (string, error) {
 		return cfg.ClientID, nil
 	case "current_account":
 		return cfg.CurrentAccount, nil
-	case "imap_server":
-		return cfg.IMAPServer, nil
-	case "smtp_server":
-		return cfg.SMTPServer, nil
 	case "cache_dir":
 		return cfg.CacheDir, nil
 	default:

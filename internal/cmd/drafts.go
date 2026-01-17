@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yourname/o365-mail-cli/internal/auth"
-	"github.com/yourname/o365-mail-cli/internal/mail"
 )
 
 var draftsCmd = &cobra.Command{
@@ -54,24 +53,24 @@ Examples:
 
 // Draft send command
 var draftSendCmd = &cobra.Command{
-	Use:   "send [uid]",
+	Use:   "send [message-id]",
 	Short: "Send a draft",
 	Long: `Sends a draft email and removes it from the Drafts folder.
 
 Examples:
-  o365-mail-cli mail drafts send 12345`,
+  o365-mail-cli mail drafts send AAMkAGI2...`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDraftSend,
 }
 
 // Draft delete command
 var draftDeleteCmd = &cobra.Command{
-	Use:   "delete [uid]",
+	Use:   "delete [message-id]",
 	Short: "Delete a draft",
 	Long: `Deletes a draft email from the Drafts folder.
 
 Examples:
-  o365-mail-cli mail drafts delete 12345`,
+  o365-mail-cli mail drafts delete AAMkAGI2...`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDraftDelete,
 }
@@ -123,86 +122,42 @@ func runDraftCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("message body required (--body or --body-file)")
 	}
 
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	debugLog("Creating draft via Graph API")
+
+	draftID, err := client.SaveDraft(draftTo, draftCc, draftSubject, body, draftHTML)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
+		return fmt.Errorf("failed to save draft: %w", err)
 	}
 
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Create draft
-	draft := mail.DraftEmail{
-		From:    account,
-		To:      draftTo,
-		Cc:      draftCc,
-		Subject: draftSubject,
-		Body:    body,
-		HTML:    draftHTML,
-	}
-
-	if err := imapClient.SaveDraft(draft); err != nil {
-		return err
-	}
-
-	printSuccess("Draft saved to Drafts folder")
+	printSuccess("Draft saved (ID: %s)", draftID)
 	return nil
 }
 
 func runDraftList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
+	debugLog("Fetching drafts via Graph API")
 
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// List drafts
-	drafts, err := imapClient.ListDrafts(50)
+	drafts, err := client.ListDrafts(50)
 	if err != nil {
 		return err
 	}
 
 	// Output
 	if draftListJSON {
-		return outputJSON(drafts)
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(drafts)
 	}
 
 	if len(drafts) == 0 {
@@ -210,18 +165,19 @@ func runDraftList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("\n%-8s %-20s %-30s %s\n", "UID", "Date", "To", "Subject")
-	fmt.Println(strings.Repeat("-", 100))
+	fmt.Printf("\n%-50s %-20s %-25s %s\n", "ID", "Date", "To", "Subject")
+	fmt.Println(strings.Repeat("-", 120))
 
 	for _, draft := range drafts {
 		to := ""
 		if len(draft.To) > 0 {
-			to = truncate(draft.To[0], 28)
+			to = truncate(draft.To[0], 23)
 		}
 		subject := truncate(draft.Subject, 35)
 		date := draft.Date.Local().Format("2006-01-02 15:04")
+		id := truncate(draft.ID, 48)
 
-		fmt.Printf("  %-7d %-20s %-30s %s\n", draft.UID, date, to, subject)
+		fmt.Printf("%-50s %-20s %-25s %s\n", id, date, to, subject)
 	}
 
 	fmt.Printf("\n%d draft(s) found\n", len(drafts))
@@ -231,110 +187,38 @@ func runDraftList(cmd *cobra.Command, args []string) error {
 
 func runDraftSend(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
+	debugLog("Sending draft via Graph API")
+
+	if err := client.SendDraft(messageID); err != nil {
+		return fmt.Errorf("failed to send draft: %w", err)
 	}
 
-	// IMAP Client - fetch draft
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-
-	draft, err := imapClient.GetEmail("Drafts", uid)
-	if err != nil {
-		imapClient.Close()
-		return fmt.Errorf("failed to fetch draft: %w", err)
-	}
-
-	// SMTP Client
-	smtpClient := mail.NewSMTPClient(account, cfg.SMTPServer, cfg.SMTPPort)
-
-	debugLog("Sending draft via %s:%d", cfg.SMTPServer, cfg.SMTPPort)
-
-	// Send
-	opts := mail.SendOptions{
-		To:      draft.To,
-		Subject: draft.Subject,
-		Body:    draft.Body,
-	}
-
-	if err := smtpClient.Send(accessToken, opts); err != nil {
-		imapClient.Close()
-		return fmt.Errorf("send failed: %w", err)
-	}
-
-	// Delete draft after successful send
-	if err := imapClient.DeleteDraft(uid); err != nil {
-		imapClient.Close()
-		return fmt.Errorf("sent but failed to delete draft: %w", err)
-	}
-	imapClient.Close()
-
-	printSuccess("Draft %d sent to %s", uid, strings.Join(draft.To, ", "))
+	printSuccess("Draft sent successfully")
 	return nil
 }
 
 func runDraftDelete(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
+	debugLog("Deleting draft via Graph API")
+
+	if err := client.DeleteDraft(messageID); err != nil {
+		return fmt.Errorf("failed to delete draft: %w", err)
 	}
 
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Delete draft
-	if err := imapClient.DeleteDraft(uid); err != nil {
-		return err
-	}
-
-	printSuccess("Draft %d deleted", uid)
+	printSuccess("Draft deleted")
 	return nil
 }

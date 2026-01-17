@@ -16,13 +16,13 @@ import (
 var mailCmd = &cobra.Command{
 	Use:   "mail",
 	Short: "Manage emails",
-	Long:  "Commands for reading and sending emails.",
+	Long:  "Commands for reading and sending emails via Microsoft Graph API.",
 }
 
 // List Command
 var (
 	listFolder     string
-	listLimit      uint32
+	listLimit      int
 	listUnreadOnly bool
 	listJSON       bool
 )
@@ -44,15 +44,15 @@ Examples:
 var readFolder string
 
 var readCmd = &cobra.Command{
-	Use:   "read [uid]",
+	Use:   "read [message-id]",
 	Short: "Read email",
 	Long: `Shows the content of an email.
 
-Find the UID in the output of 'mail list'.
+Find the message ID in the output of 'mail list --json'.
 
 Examples:
-  o365-mail-cli mail read 12345
-  o365-mail-cli mail read 12345 --folder "Sent Items"`,
+  o365-mail-cli mail read AAMkAGI2...
+  o365-mail-cli mail read AAMkAGI2... --folder "Sent Items"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runRead,
 }
@@ -66,18 +66,17 @@ var (
 	sendBody     string
 	sendBodyFile string
 	sendHTML     bool
-	sendAttach   []string
 )
 
 var sendCmd = &cobra.Command{
 	Use:   "send",
 	Short: "Send email",
-	Long: `Sends an email.
+	Long: `Sends an email via Microsoft Graph API.
 
 Examples:
   o365-mail-cli mail send --to user@example.com --subject "Test" --body "Hello!"
   o365-mail-cli mail send --to user@example.com --subject "Report" --body-file report.txt
-  o365-mail-cli mail send --to user@example.com --cc boss@example.com --subject "Info" --body "Text" --attach file.pdf`,
+  o365-mail-cli mail send --to user@example.com --cc boss@example.com --subject "Info" --body "Text"`,
 	RunE: runSend,
 }
 
@@ -85,13 +84,13 @@ Examples:
 var markReadFolder string
 
 var markReadCmd = &cobra.Command{
-	Use:   "mark-read [uid]",
+	Use:   "mark-read [message-id]",
 	Short: "Mark email as read",
-	Long: `Marks an email as read by adding the \Seen flag.
+	Long: `Marks an email as read.
 
 Examples:
-  o365-mail-cli mail mark-read 12345
-  o365-mail-cli mail mark-read 12345 --folder "Archive"`,
+  o365-mail-cli mail mark-read AAMkAGI2...
+  o365-mail-cli mail mark-read AAMkAGI2... --folder "Archive"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runMarkRead,
 }
@@ -100,13 +99,13 @@ Examples:
 var markUnreadFolder string
 
 var markUnreadCmd = &cobra.Command{
-	Use:   "mark-unread [uid]",
+	Use:   "mark-unread [message-id]",
 	Short: "Mark email as unread",
-	Long: `Marks an email as unread by removing the \Seen flag.
+	Long: `Marks an email as unread.
 
 Examples:
-  o365-mail-cli mail mark-unread 12345
-  o365-mail-cli mail mark-unread 12345 --folder "Archive"`,
+  o365-mail-cli mail mark-unread AAMkAGI2...
+  o365-mail-cli mail mark-unread AAMkAGI2... --folder "Archive"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runMarkUnread,
 }
@@ -118,13 +117,13 @@ var (
 )
 
 var moveCmd = &cobra.Command{
-	Use:   "move [uid]",
+	Use:   "move [message-id]",
 	Short: "Move email to folder",
 	Long: `Moves an email to another folder.
 
 Examples:
-  o365-mail-cli mail move 12345 --to "Archive"
-  o365-mail-cli mail move 12345 --folder "Sent Items" --to "Archive/2024"`,
+  o365-mail-cli mail move AAMkAGI2... --to "Archive"
+  o365-mail-cli mail move AAMkAGI2... --folder "Sent Items" --to "Archive"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runMove,
 }
@@ -133,14 +132,14 @@ Examples:
 var trashFolder string
 
 var trashCmd = &cobra.Command{
-	Use:   "trash [uid]",
+	Use:   "trash [message-id]",
 	Short: "Move email to Trash",
-	Long: `Moves an email to the Trash folder (Deleted Items).
+	Long: `Moves an email to the Deleted Items folder.
 This is a safe delete - the email can be recovered from Trash.
 
 Examples:
-  o365-mail-cli mail trash 12345
-  o365-mail-cli mail trash 12345 --folder "Spam"`,
+  o365-mail-cli mail trash AAMkAGI2...
+  o365-mail-cli mail trash AAMkAGI2... --folder "Spam"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTrash,
 }
@@ -151,7 +150,7 @@ var (
 	searchFrom    string
 	searchSubject string
 	searchSince   string
-	searchLimit   uint32
+	searchLimit   int
 	searchJSON    bool
 )
 
@@ -175,13 +174,13 @@ var (
 )
 
 var attachmentsCmd = &cobra.Command{
-	Use:   "attachments [uid]",
+	Use:   "attachments [message-id]",
 	Short: "Download email attachments",
 	Long: `Downloads attachments from an email.
 
 Examples:
-  o365-mail-cli mail attachments 12345 --save-to ./downloads
-  o365-mail-cli mail attachments 12345 --folder "Sent Items" --save-to /tmp/attachments`,
+  o365-mail-cli mail attachments AAMkAGI2... --save-to ./downloads
+  o365-mail-cli mail attachments AAMkAGI2... --folder "Sent Items" --save-to /tmp/attachments`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAttachments,
 }
@@ -195,14 +194,14 @@ var (
 )
 
 var replyCmd = &cobra.Command{
-	Use:   "reply [uid]",
+	Use:   "reply [message-id]",
 	Short: "Reply to an email",
-	Long: `Replies to an email with proper threading headers.
+	Long: `Replies to an email.
 
 Examples:
-  o365-mail-cli mail reply 12345 --body "Thank you for your email!"
-  o365-mail-cli mail reply 12345 --body-file response.txt
-  o365-mail-cli mail reply 12345 --body "Thanks!" --reply-all`,
+  o365-mail-cli mail reply AAMkAGI2... --body "Thank you for your email!"
+  o365-mail-cli mail reply AAMkAGI2... --body-file response.txt
+  o365-mail-cli mail reply AAMkAGI2... --body "Thanks!" --reply-all`,
 	Args: cobra.ExactArgs(1),
 	RunE: runReply,
 }
@@ -216,26 +215,26 @@ var (
 )
 
 var forwardCmd = &cobra.Command{
-	Use:   "forward [uid]",
+	Use:   "forward [message-id]",
 	Short: "Forward an email",
 	Long: `Forwards an email to new recipients.
 
 Examples:
-  o365-mail-cli mail forward 12345 --to colleague@example.com
-  o365-mail-cli mail forward 12345 --to colleague@example.com --body "FYI - please review"`,
+  o365-mail-cli mail forward AAMkAGI2... --to colleague@example.com
+  o365-mail-cli mail forward AAMkAGI2... --to colleague@example.com --body "FYI - please review"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runForward,
 }
 
 func init() {
 	// List flags
-	mailListCmd.Flags().StringVar(&listFolder, "folder", "INBOX", "Folder to read from")
-	mailListCmd.Flags().Uint32Var(&listLimit, "limit", 10, "Maximum number of emails")
+	mailListCmd.Flags().StringVar(&listFolder, "folder", "inbox", "Folder to read from")
+	mailListCmd.Flags().IntVar(&listLimit, "limit", 10, "Maximum number of emails")
 	mailListCmd.Flags().BoolVar(&listUnreadOnly, "unread", false, "Only unread emails")
 	mailListCmd.Flags().BoolVar(&listJSON, "json", false, "Output as JSON")
 
 	// Read flags
-	readCmd.Flags().StringVar(&readFolder, "folder", "INBOX", "Folder of the email")
+	readCmd.Flags().StringVar(&readFolder, "folder", "inbox", "Folder of the email")
 
 	// Send flags
 	sendCmd.Flags().StringArrayVar(&sendTo, "to", nil, "Recipients (can be specified multiple times)")
@@ -245,46 +244,45 @@ func init() {
 	sendCmd.Flags().StringVar(&sendBody, "body", "", "Message body")
 	sendCmd.Flags().StringVar(&sendBodyFile, "body-file", "", "Read message body from file")
 	sendCmd.Flags().BoolVar(&sendHTML, "html", false, "Send body as HTML")
-	sendCmd.Flags().StringArrayVar(&sendAttach, "attach", nil, "Attachments (file paths)")
 
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("subject")
 
 	// Mark-read flags
-	markReadCmd.Flags().StringVar(&markReadFolder, "folder", "INBOX", "Folder of the email")
+	markReadCmd.Flags().StringVar(&markReadFolder, "folder", "inbox", "Folder of the email")
 
 	// Mark-unread flags
-	markUnreadCmd.Flags().StringVar(&markUnreadFolder, "folder", "INBOX", "Folder of the email")
+	markUnreadCmd.Flags().StringVar(&markUnreadFolder, "folder", "inbox", "Folder of the email")
 
 	// Move flags
-	moveCmd.Flags().StringVar(&moveFromFolder, "folder", "INBOX", "Source folder")
+	moveCmd.Flags().StringVar(&moveFromFolder, "folder", "inbox", "Source folder")
 	moveCmd.Flags().StringVar(&moveToFolder, "to", "", "Destination folder")
 	moveCmd.MarkFlagRequired("to")
 
 	// Trash flags
-	trashCmd.Flags().StringVar(&trashFolder, "folder", "INBOX", "Folder of the email")
+	trashCmd.Flags().StringVar(&trashFolder, "folder", "inbox", "Folder of the email")
 
 	// Search flags
-	searchCmd.Flags().StringVar(&searchFolder, "folder", "INBOX", "Folder to search")
+	searchCmd.Flags().StringVar(&searchFolder, "folder", "inbox", "Folder to search")
 	searchCmd.Flags().StringVar(&searchFrom, "from", "", "Filter by sender")
 	searchCmd.Flags().StringVar(&searchSubject, "subject", "", "Filter by subject")
 	searchCmd.Flags().StringVar(&searchSince, "since", "", "Filter emails since (e.g., 24h, 7d, 30d)")
-	searchCmd.Flags().Uint32Var(&searchLimit, "limit", 50, "Maximum results")
+	searchCmd.Flags().IntVar(&searchLimit, "limit", 50, "Maximum results")
 	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "Output as JSON")
 
 	// Attachments flags
-	attachmentsCmd.Flags().StringVar(&attachFolder, "folder", "INBOX", "Folder of the email")
+	attachmentsCmd.Flags().StringVar(&attachFolder, "folder", "inbox", "Folder of the email")
 	attachmentsCmd.Flags().StringVar(&attachSaveTo, "save-to", "", "Directory to save attachments")
 	attachmentsCmd.MarkFlagRequired("save-to")
 
 	// Reply flags
-	replyCmd.Flags().StringVar(&replyFolder, "folder", "INBOX", "Folder of the email")
+	replyCmd.Flags().StringVar(&replyFolder, "folder", "inbox", "Folder of the email")
 	replyCmd.Flags().StringVar(&replyBody, "body", "", "Reply message body")
 	replyCmd.Flags().StringVar(&replyBodyFile, "body-file", "", "Read reply body from file")
 	replyCmd.Flags().BoolVar(&replyAll, "reply-all", false, "Reply to all recipients")
 
 	// Forward flags
-	forwardCmd.Flags().StringVar(&forwardFolder, "folder", "INBOX", "Folder of the email")
+	forwardCmd.Flags().StringVar(&forwardFolder, "folder", "inbox", "Folder of the email")
 	forwardCmd.Flags().StringArrayVar(&forwardTo, "to", nil, "Recipients (can be specified multiple times)")
 	forwardCmd.Flags().StringVar(&forwardBody, "body", "", "Additional message body")
 	forwardCmd.Flags().StringVar(&forwardBodyFile, "body-file", "", "Read additional body from file")
@@ -303,45 +301,46 @@ func init() {
 	mailCmd.AddCommand(forwardCmd)
 }
 
+// getGraphClient creates a Graph API client with authentication
+func getGraphClient(ctx context.Context) (*mail.GraphClient, error) {
+	account := getActiveAccount()
+	if account == "" {
+		return nil, fmt.Errorf("no account configured. Please run 'auth login'")
+	}
+
+	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	if err != nil {
+		return nil, fmt.Errorf("not logged in: %w", err)
+	}
+
+	return mail.NewGraphClient(accessToken), nil
+}
+
 func runMailList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Get active account
-	email := getActiveAccount()
-	if email == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
-	if err != nil {
-		return fmt.Errorf("failed to create OAuth client: %w", err)
-	}
-
-	accessToken, err := oauthClient.GetAccessToken(ctx, email)
-	if err != nil {
-		return fmt.Errorf("not logged in. Please run 'auth login': %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, email, cfg.IMAPServer, cfg.IMAPPort)
-
-	debugLog("Connecting to IMAP server %s:%d", cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	debugLog("IMAP connection established, reading folder %s", listFolder)
-
-	// Fetch emails
-	emails, err := imapClient.ListEmails(listFolder, listLimit, listUnreadOnly)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Output
+	folderID, err := client.GetFolderByName(listFolder)
+	if err != nil {
+		return err
+	}
+
+	debugLog("Fetching emails from folder %s via Graph API", listFolder)
+
+	emails, err := client.ListEmails(folderID, listLimit, listUnreadOnly)
+	if err != nil {
+		return err
+	}
+
 	if listJSON {
 		return outputJSON(emails)
 	}
@@ -351,8 +350,8 @@ func runMailList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("\n%-8s %-20s %-30s %s\n", "UID", "Date", "From", "Subject")
-	fmt.Println(strings.Repeat("─", 100))
+	fmt.Printf("\n%-40s %-20s %-25s %s\n", "ID", "Date", "From", "Subject")
+	fmt.Println(strings.Repeat("─", 110))
 
 	for _, email := range emails {
 		unreadMarker := " "
@@ -360,11 +359,12 @@ func runMailList(cmd *cobra.Command, args []string) error {
 			unreadMarker = "●"
 		}
 
-		from := truncate(email.From, 28)
-		subject := truncate(email.Subject, 35)
+		id := truncate(email.MessageID, 38)
+		from := truncate(email.From, 23)
+		subject := truncate(email.Subject, 30)
 		date := email.Date.Local().Format("2006-01-02 15:04")
 
-		fmt.Printf("%s %-7d %-20s %-30s %s\n", unreadMarker, email.UID, date, from, subject)
+		fmt.Printf("%s %-39s %-20s %-25s %s\n", unreadMarker, id, date, from, subject)
 	}
 
 	fmt.Printf("\n%d emails shown\n", len(emails))
@@ -374,45 +374,23 @@ func runMailList(cmd *cobra.Command, args []string) error {
 
 func runRead(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Fetch email
-	email, err := imapClient.GetEmail(readFolder, uid)
+	folderID, err := client.GetFolderByName(readFolder)
 	if err != nil {
 		return err
 	}
 
-	// Display
+	email, err := client.GetEmail(folderID, messageID)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 	fmt.Printf("From:    %s\n", email.From)
@@ -429,12 +407,10 @@ func runRead(cmd *cobra.Command, args []string) error {
 func runSend(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Validation
 	if len(sendTo) == 0 {
 		return fmt.Errorf("at least one recipient (--to) required")
 	}
 
-	// Body from file or direct
 	body := sendBody
 	if sendBodyFile != "" {
 		content, err := os.ReadFile(sendBodyFile)
@@ -448,47 +424,23 @@ func runSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("message body required (--body or --body-file)")
 	}
 
-	// Get active account
-	email := getActiveAccount()
-	if email == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Check attachments
-	for _, attach := range sendAttach {
-		if _, err := os.Stat(attach); err != nil {
-			return fmt.Errorf("attachment not found: %s", attach)
-		}
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, email)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
+	debugLog("Sending email via Microsoft Graph API")
 
-	// SMTP Client
-	smtpClient := mail.NewSMTPClient(email, cfg.SMTPServer, cfg.SMTPPort)
-
-	debugLog("Sending email via %s:%d", cfg.SMTPServer, cfg.SMTPPort)
-
-	// Send
 	opts := mail.SendOptions{
-		To:          sendTo,
-		Cc:          sendCc,
-		Bcc:         sendBcc,
-		Subject:     sendSubject,
-		Body:        body,
-		HTML:        sendHTML,
-		Attachments: sendAttach,
+		To:      sendTo,
+		Cc:      sendCc,
+		Bcc:     sendBcc,
+		Subject: sendSubject,
+		Body:    body,
+		HTML:    sendHTML,
 	}
 
-	if err := smtpClient.Send(accessToken, opts); err != nil {
+	if err := client.Send(opts); err != nil {
 		return fmt.Errorf("send failed: %w", err)
 	}
 
@@ -496,240 +448,136 @@ func runSend(cmd *cobra.Command, args []string) error {
 	if len(sendCc) > 0 {
 		printInfo("CC: %s", strings.Join(sendCc, ", "))
 	}
-	if len(sendAttach) > 0 {
-		printInfo("With %d attachment(s)", len(sendAttach))
-	}
 
 	return nil
 }
 
 func runMarkRead(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(markReadFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Mark as read
-	if err := imapClient.MarkAsRead(markReadFolder, uid); err != nil {
 		return err
 	}
 
-	printSuccess("Email %d marked as read", uid)
+	if err := client.MarkAsRead(folderID, messageID); err != nil {
+		return err
+	}
+
+	printSuccess("Email marked as read")
 	return nil
 }
 
 func runMarkUnread(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(markUnreadFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Mark as unread
-	if err := imapClient.MarkAsUnread(markUnreadFolder, uid); err != nil {
 		return err
 	}
 
-	printSuccess("Email %d marked as unread", uid)
+	if err := client.MarkAsUnread(folderID, messageID); err != nil {
+		return err
+	}
+
+	printSuccess("Email marked as unread")
 	return nil
 }
 
 func runMove(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	srcFolderID, err := client.GetFolderByName(moveFromFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Move email
-	if err := imapClient.MoveEmail(moveFromFolder, moveToFolder, uid); err != nil {
 		return err
 	}
 
-	printSuccess("Email %d moved from '%s' to '%s'", uid, moveFromFolder, moveToFolder)
+	dstFolderID, err := client.GetFolderByName(moveToFolder)
+	if err != nil {
+		return err
+	}
+
+	if err := client.MoveEmail(srcFolderID, messageID, dstFolderID); err != nil {
+		return err
+	}
+
+	printSuccess("Email moved from '%s' to '%s'", moveFromFolder, moveToFolder)
 	return nil
 }
 
 func runTrash(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(trashFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Trash email
-	if err := imapClient.TrashEmail(trashFolder, uid); err != nil {
 		return err
 	}
 
-	printSuccess("Email %d moved to Trash", uid)
+	if err := client.TrashEmail(folderID, messageID); err != nil {
+		return err
+	}
+
+	printSuccess("Email moved to Trash")
 	return nil
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Check that at least one search criterion is provided
 	if searchFrom == "" && searchSubject == "" && searchSince == "" {
 		return fmt.Errorf("at least one search criterion required (--from, --subject, or --since)")
 	}
 
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(searchFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
 		return err
 	}
-	defer imapClient.Close()
 
-	// Build search criteria
-	criteria := mail.SearchCriteria{
-		From:    searchFrom,
-		Subject: searchSubject,
-	}
-
-	// Parse since duration
+	var since time.Time
 	if searchSince != "" {
 		duration, err := parseDuration(searchSince)
 		if err != nil {
 			return fmt.Errorf("invalid --since value: %w", err)
 		}
-		criteria.Since = time.Now().Add(-duration)
+		since = time.Now().Add(-duration)
 	}
 
-	// Search
-	emails, err := imapClient.SearchEmails(searchFolder, criteria, searchLimit)
+	debugLog("Searching emails via Graph API")
+
+	emails, err := client.SearchEmails(folderID, searchFrom, searchSubject, since, searchLimit)
 	if err != nil {
 		return err
 	}
 
-	// Output
 	if searchJSON {
 		return outputJSON(emails)
 	}
@@ -739,8 +587,8 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("\n%-8s %-20s %-30s %s\n", "UID", "Date", "From", "Subject")
-	fmt.Println(strings.Repeat("─", 100))
+	fmt.Printf("\n%-40s %-20s %-25s %s\n", "ID", "Date", "From", "Subject")
+	fmt.Println(strings.Repeat("─", 110))
 
 	for _, email := range emails {
 		unreadMarker := " "
@@ -748,11 +596,12 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			unreadMarker = "●"
 		}
 
-		from := truncate(email.From, 28)
-		subject := truncate(email.Subject, 35)
+		id := truncate(email.MessageID, 38)
+		from := truncate(email.From, 23)
+		subject := truncate(email.Subject, 30)
 		date := email.Date.Local().Format("2006-01-02 15:04")
 
-		fmt.Printf("%s %-7d %-20s %-30s %s\n", unreadMarker, email.UID, date, from, subject)
+		fmt.Printf("%s %-39s %-20s %-25s %s\n", unreadMarker, id, date, from, subject)
 	}
 
 	fmt.Printf("\n%d emails found\n", len(emails))
@@ -762,46 +611,25 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 func runAttachments(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(attachFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
 		return err
 	}
-	defer imapClient.Close()
 
-	// Get attachments
-	attachments, err := imapClient.GetAttachments(attachFolder, uid, attachSaveTo)
+	attachments, err := client.GetAttachments(folderID, messageID, attachSaveTo)
 	if err != nil {
 		return err
 	}
 
 	if len(attachments) == 0 {
-		printInfo("No attachments found in email %d", uid)
+		printInfo("No attachments found in this email")
 		return nil
 	}
 
@@ -815,14 +643,8 @@ func runAttachments(cmd *cobra.Command, args []string) error {
 
 func runReply(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Get body from file or direct
 	body := replyBody
 	if replyBodyFile != "" {
 		content, err := os.ReadFile(replyBodyFile)
@@ -836,60 +658,39 @@ func runReply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reply body required (--body or --body-file)")
 	}
 
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(replyFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client - fetch original email
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
 		return err
 	}
 
-	originalEmail, err := imapClient.GetEmail(replyFolder, uid)
+	originalEmail, err := client.GetEmail(folderID, messageID)
 	if err != nil {
-		imapClient.Close()
 		return fmt.Errorf("failed to fetch original email: %w", err)
 	}
-	imapClient.Close()
 
-	// SMTP Client
-	smtpClient := mail.NewSMTPClient(account, cfg.SMTPServer, cfg.SMTPPort)
+	debugLog("Sending reply via Microsoft Graph API")
 
-	debugLog("Sending reply via %s:%d", cfg.SMTPServer, cfg.SMTPPort)
-
-	// Build reply options
 	opts := mail.ReplyOptions{
-		OriginalMessageID: originalEmail.MessageID,
-		OriginalFrom:      originalEmail.From,
-		OriginalTo:        originalEmail.To,
-		OriginalSubject:   originalEmail.Subject,
-		OriginalDate:      originalEmail.Date,
-		OriginalBody:      originalEmail.Body,
-		Body:              body,
-		ReplyAll:          replyAll,
+		OriginalFrom:    originalEmail.From,
+		OriginalTo:      originalEmail.To,
+		OriginalSubject: originalEmail.Subject,
+		OriginalDate:    originalEmail.Date,
+		OriginalBody:    originalEmail.Body,
+		Body:            body,
+		ReplyAll:        replyAll,
 	}
 
-	if err := smtpClient.Reply(accessToken, opts); err != nil {
+	if err := client.Reply(opts); err != nil {
 		return fmt.Errorf("reply failed: %w", err)
 	}
 
 	if replyAll {
-		printSuccess("Reply-all sent for email %d", uid)
+		printSuccess("Reply-all sent")
 	} else {
 		printSuccess("Reply sent to %s", originalEmail.From)
 	}
@@ -899,19 +700,12 @@ func runReply(cmd *cobra.Command, args []string) error {
 
 func runForward(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	messageID := args[0]
 
-	// Parse UID
-	var uid uint32
-	if _, err := fmt.Sscanf(args[0], "%d", &uid); err != nil {
-		return fmt.Errorf("invalid UID: %s", args[0])
-	}
-
-	// Validate recipients
 	if len(forwardTo) == 0 {
 		return fmt.Errorf("at least one recipient (--to) required")
 	}
 
-	// Get body from file or direct
 	body := forwardBody
 	if forwardBodyFile != "" {
 		content, err := os.ReadFile(forwardBodyFile)
@@ -921,43 +715,23 @@ func runForward(cmd *cobra.Command, args []string) error {
 		body = string(content)
 	}
 
-	// Get active account
-	account := getActiveAccount()
-	if account == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, account)
+	folderID, err := client.GetFolderByName(forwardFolder)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client - fetch original email
-	imapClient := mail.NewIMAPClient(oauthClient, account, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
 		return err
 	}
 
-	originalEmail, err := imapClient.GetEmail(forwardFolder, uid)
+	originalEmail, err := client.GetEmail(folderID, messageID)
 	if err != nil {
-		imapClient.Close()
 		return fmt.Errorf("failed to fetch original email: %w", err)
 	}
-	imapClient.Close()
 
-	// SMTP Client
-	smtpClient := mail.NewSMTPClient(account, cfg.SMTPServer, cfg.SMTPPort)
+	debugLog("Forwarding email via Microsoft Graph API")
 
-	debugLog("Forwarding email via %s:%d", cfg.SMTPServer, cfg.SMTPPort)
-
-	// Build forward options
 	opts := mail.ForwardOptions{
 		OriginalFrom:    originalEmail.From,
 		OriginalTo:      originalEmail.To,
@@ -968,25 +742,23 @@ func runForward(cmd *cobra.Command, args []string) error {
 		Body:            body,
 	}
 
-	if err := smtpClient.Forward(accessToken, opts); err != nil {
+	if err := client.Forward(opts); err != nil {
 		return fmt.Errorf("forward failed: %w", err)
 	}
 
-	printSuccess("Email %d forwarded to %s", uid, strings.Join(forwardTo, ", "))
+	printSuccess("Email forwarded to %s", strings.Join(forwardTo, ", "))
 
 	return nil
 }
 
 // Helper functions
 
-// parseDuration parses duration strings like "24h", "7d", "30d"
 func parseDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, fmt.Errorf("empty duration")
 	}
 
-	// Handle days specially
 	if strings.HasSuffix(s, "d") {
 		days := s[:len(s)-1]
 		var d int
@@ -996,7 +768,6 @@ func parseDuration(s string) (time.Duration, error) {
 		return time.Duration(d) * 24 * time.Hour, nil
 	}
 
-	// Use standard time.ParseDuration for hours, minutes, seconds
 	return time.ParseDuration(s)
 }
 

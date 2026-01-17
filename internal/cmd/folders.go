@@ -6,14 +6,12 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yourname/o365-mail-cli/internal/auth"
-	"github.com/yourname/o365-mail-cli/internal/mail"
 )
 
 var foldersCmd = &cobra.Command{
 	Use:   "folders",
 	Short: "Manage folders",
-	Long:  "Commands for listing, creating, and deleting IMAP folders.",
+	Long:  "Commands for listing, creating, and deleting mail folders via Microsoft Graph API.",
 }
 
 var foldersListCmd = &cobra.Command{
@@ -25,13 +23,11 @@ var foldersListCmd = &cobra.Command{
 var foldersCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create new folder",
-	Long: `Creates a new IMAP folder.
-
-For subfolders, use '/' as delimiter.
+	Long: `Creates a new mail folder.
 
 Examples:
   o365-mail-cli folders create "Archive"
-  o365-mail-cli folders create "Archive/2024"`,
+  o365-mail-cli folders create "Projects"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runFoldersCreate,
 }
@@ -39,7 +35,7 @@ Examples:
 var foldersDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete folder",
-	Long: `Deletes an IMAP folder.
+	Long: `Deletes a mail folder.
 
 Warning: All emails in the folder will be deleted!
 
@@ -58,33 +54,14 @@ func init() {
 func runFoldersList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Get active account
-	email := getActiveAccount()
-	if email == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, email)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
+	debugLog("Fetching folders via Graph API")
 
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, email, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Fetch folders
-	folders, err := imapClient.ListFolders()
+	folders, err := client.ListFolders()
 	if err != nil {
 		return err
 	}
@@ -93,35 +70,41 @@ func runFoldersList(cmd *cobra.Command, args []string) error {
 	fmt.Println("──────────────────")
 
 	for _, folder := range folders {
-		// Indentation based on hierarchy
-		depth := strings.Count(folder.Name, folder.Delimiter)
+		// Indentation based on hierarchy (count '/' in name)
+		depth := strings.Count(folder.Name, "/")
 		indent := strings.Repeat("  ", depth)
 
-		// Icon based on attributes
-		icon := "📁"
-		for _, attr := range folder.Attributes {
-			switch attr {
-			case "\\Sent":
-				icon = "📤"
-			case "\\Drafts":
-				icon = "📝"
-			case "\\Trash":
-				icon = "🗑️"
-			case "\\Junk":
-				icon = "⚠️"
-			case "\\Archive":
-				icon = "📦"
-			}
-		}
-
-		// Show only last part of name for better readability
+		// Show display name (last part)
 		displayName := folder.Name
-		if folder.Delimiter != "" {
-			parts := strings.Split(folder.Name, folder.Delimiter)
-			displayName = parts[len(parts)-1]
+		if idx := strings.LastIndex(folder.Name, "/"); idx != -1 {
+			displayName = folder.Name[idx+1:]
 		}
 
-		fmt.Printf("%s%s %s\n", indent, icon, displayName)
+		// Icon based on folder name
+		icon := "📁"
+		lowerName := strings.ToLower(displayName)
+		switch {
+		case strings.Contains(lowerName, "sent"):
+			icon = "📤"
+		case strings.Contains(lowerName, "draft") || strings.Contains(lowerName, "entwürf"):
+			icon = "📝"
+		case strings.Contains(lowerName, "deleted") || strings.Contains(lowerName, "trash") || strings.Contains(lowerName, "gelöscht"):
+			icon = "🗑️"
+		case strings.Contains(lowerName, "junk") || strings.Contains(lowerName, "spam"):
+			icon = "⚠️"
+		case strings.Contains(lowerName, "archive") || strings.Contains(lowerName, "archiv"):
+			icon = "📦"
+		case strings.Contains(lowerName, "inbox") || strings.Contains(lowerName, "posteingang"):
+			icon = "📥"
+		}
+
+		// Show unread count if any
+		unreadInfo := ""
+		if folder.UnreadCount > 0 {
+			unreadInfo = fmt.Sprintf(" (%d unread)", folder.UnreadCount)
+		}
+
+		fmt.Printf("%s%s %s%s\n", indent, icon, displayName, unreadInfo)
 	}
 
 	fmt.Printf("\n%d folders found\n", len(folders))
@@ -133,33 +116,14 @@ func runFoldersCreate(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	folderName := args[0]
 
-	// Get active account
-	email := getActiveAccount()
-	if email == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, email)
-	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
+	debugLog("Creating folder via Graph API")
 
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, email, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
-		return err
-	}
-	defer imapClient.Close()
-
-	// Create folder
-	if err := imapClient.CreateFolder(folderName); err != nil {
+	if err := client.CreateFolder(folderName, ""); err != nil {
 		return err
 	}
 
@@ -172,12 +136,6 @@ func runFoldersDelete(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	folderName := args[0]
 
-	// Get active account
-	email := getActiveAccount()
-	if email == "" {
-		return fmt.Errorf("no account configured. Please run 'auth login'")
-	}
-
 	// Confirmation
 	fmt.Printf("Delete folder '%s'? All emails will be lost! [y/N]: ", folderName)
 	var response string
@@ -188,27 +146,20 @@ func runFoldersDelete(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get OAuth token
-	oauthClient, err := auth.NewOAuthClient(cfg.ClientID, cfg.CacheDir)
+	client, err := getGraphClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	accessToken, err := oauthClient.GetAccessToken(ctx, email)
+	// Get folder ID
+	folderID, err := client.GetFolderByName(folderName)
 	if err != nil {
-		return fmt.Errorf("not logged in: %w", err)
-	}
-
-	// IMAP Client
-	imapClient := mail.NewIMAPClient(oauthClient, email, cfg.IMAPServer, cfg.IMAPPort)
-
-	if err := imapClient.Connect(accessToken); err != nil {
 		return err
 	}
-	defer imapClient.Close()
 
-	// Delete folder
-	if err := imapClient.DeleteFolder(folderName); err != nil {
+	debugLog("Deleting folder via Graph API")
+
+	if err := client.DeleteFolder(folderID); err != nil {
 		return err
 	}
 

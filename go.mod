@@ -4,8 +4,6 @@ go 1.21
 
 require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2
-	github.com/emersion/go-imap v1.2.1
-	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1

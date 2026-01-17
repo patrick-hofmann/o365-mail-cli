@@ -4,10 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 )
+
+// getCacheFileInfo returns file info for the cache file
+func getCacheFileInfo(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
 
 const (
 	// DefaultClientID is the public client ID of the o365-mail-cli Azure App
@@ -17,10 +23,10 @@ const (
 	Authority = "https://login.microsoftonline.com/common"
 )
 
-// Scopes for IMAP and SMTP access
+// Scopes for Microsoft Graph API mail access
 var Scopes = []string{
-	"https://outlook.office.com/IMAP.AccessAsUser.All",
-	"https://outlook.office.com/SMTP.Send",
+	"https://graph.microsoft.com/Mail.ReadWrite",
+	"https://graph.microsoft.com/Mail.Send",
 	// offline_access is automatically requested by MSAL
 }
 
@@ -83,8 +89,8 @@ func (c *OAuthClient) GetAccessToken(ctx context.Context, email string) (string,
 				if err == nil {
 					return result.AccessToken, nil
 				}
-				// Silent acquisition failed for this account
-				return "", fmt.Errorf("token expired for %s, please run 'auth login' again", email)
+				// Silent acquisition failed - include actual error for diagnostics
+				return "", fmt.Errorf("token refresh failed for %s: %v", email, err)
 			}
 		}
 		return "", fmt.Errorf("no token found for %s, please run 'auth login' first", email)
@@ -141,9 +147,15 @@ func (c *OAuthClient) StartDeviceCodeFlow(ctx context.Context) (*DeviceCodeResul
 		}
 	}()
 
+	// Use returned URL or fallback to standard Microsoft device login URL
+	verificationURL := deviceCode.Result.VerificationURL
+	if verificationURL == "" {
+		verificationURL = "https://microsoft.com/devicelogin"
+	}
+
 	return &DeviceCodeResult{
 		UserCode:        deviceCode.Result.UserCode,
-		VerificationURL: deviceCode.Result.VerificationURL,
+		VerificationURL: verificationURL,
 		ExpiresIn:       int(time.Until(deviceCode.Result.ExpiresOn).Seconds()),
 		Message:         deviceCode.Result.Message,
 	}, resultChan, nil
@@ -270,8 +282,83 @@ type AuthStatus struct {
 	ExpiresAt    time.Time
 }
 
-// GenerateXOAuth2String creates the XOAUTH2 auth string for IMAP/SMTP
+// GenerateXOAuth2String creates the XOAUTH2 auth string (kept for compatibility)
 func GenerateXOAuth2String(email, accessToken string) string {
 	authStr := fmt.Sprintf("user=%s\x01auth=Bearer %s\x01\x01", email, accessToken)
 	return base64.StdEncoding.EncodeToString([]byte(authStr))
+}
+
+// DetailedAuthStatus contains detailed token diagnostic information
+type DetailedAuthStatus struct {
+	Email            string
+	HasCachedToken   bool
+	AccessExpiry     time.Time
+	RefreshPresent   bool
+	SilentRefreshOK  bool
+	LastError        string
+	CacheFile        string
+	CacheSize        int64
+	CachedAccounts   int
+}
+
+// GetDetailedStatus returns detailed diagnostic information for an account
+func (c *OAuthClient) GetDetailedStatus(ctx context.Context, email string) (*DetailedAuthStatus, error) {
+	status := &DetailedAuthStatus{
+		Email:          email,
+		CacheFile:      c.tokenCache.GetCacheDir() + "/token.json",
+		HasCachedToken: c.tokenCache.HasToken(),
+	}
+
+	// Get cache file size
+	if fi, err := getCacheFileInfo(status.CacheFile); err == nil {
+		status.CacheSize = fi.Size()
+	}
+
+	// Get all accounts
+	accounts, err := c.app.Accounts(ctx)
+	if err != nil {
+		status.LastError = fmt.Sprintf("failed to get accounts: %v", err)
+		return status, nil
+	}
+	status.CachedAccounts = len(accounts)
+
+	// Find the specific account
+	var targetAccount *struct {
+		account interface{}
+		found   bool
+	}
+	for _, account := range accounts {
+		if account.PreferredUsername == email {
+			// Try silent token acquisition to check refresh token
+			result, err := c.app.AcquireTokenSilent(ctx, Scopes,
+				public.WithSilentAccount(account),
+			)
+			if err != nil {
+				status.SilentRefreshOK = false
+				status.LastError = err.Error()
+				// We still have a cached token, just can't refresh
+				status.RefreshPresent = true // We assume refresh token exists if account is cached
+			} else {
+				status.SilentRefreshOK = true
+				status.AccessExpiry = result.ExpiresOn
+				status.RefreshPresent = true
+			}
+			targetAccount = &struct {
+				account interface{}
+				found   bool
+			}{found: true}
+			break
+		}
+	}
+
+	if targetAccount == nil || !targetAccount.found {
+		status.LastError = fmt.Sprintf("account %s not found in cache", email)
+	}
+
+	return status, nil
+}
+
+// GetCacheInfo returns information about the token cache
+func (c *OAuthClient) GetCacheInfo() (string, bool) {
+	return c.tokenCache.GetCacheDir() + "/token.json", c.tokenCache.HasToken()
 }
