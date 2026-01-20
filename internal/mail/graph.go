@@ -66,28 +66,6 @@ type SendOptions struct {
 	HTML    bool
 }
 
-// ReplyOptions contains options for replying to an email
-type ReplyOptions struct {
-	OriginalFrom    string
-	OriginalTo      []string
-	OriginalCc      []string
-	OriginalSubject string
-	OriginalBody    string
-	OriginalDate    time.Time
-	Body            string
-	ReplyAll        bool
-}
-
-// ForwardOptions contains options for forwarding an email
-type ForwardOptions struct {
-	OriginalFrom    string
-	OriginalTo      []string
-	OriginalSubject string
-	OriginalBody    string
-	OriginalDate    time.Time
-	To              []string
-	Body            string
-}
 
 // GraphMessageResponse represents a message from Graph API
 type GraphMessageResponse struct {
@@ -585,53 +563,45 @@ func (c *GraphClient) Send(opts SendOptions) error {
 	return err
 }
 
-// Reply sends a reply to an email
-func (c *GraphClient) Reply(opts ReplyOptions) error {
-	subject := opts.OriginalSubject
-	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-		subject = "Re: " + subject
+// Reply sends a reply using native Graph API
+func (c *GraphClient) Reply(messageID string, comment string, replyAll bool) error {
+	action := "reply"
+	if replyAll {
+		action = "replyAll"
+	}
+	endpoint := fmt.Sprintf("%s/me/messages/%s/%s", GraphAPIBaseURL, messageID, action)
+
+	body := map[string]interface{}{}
+	if comment != "" {
+		body["comment"] = comment
 	}
 
-	to := []string{opts.OriginalFrom}
-	var cc []string
-
-	if opts.ReplyAll {
-		for _, addr := range opts.OriginalTo {
-			to = append(to, addr)
-		}
-		cc = opts.OriginalCc
-	}
-
-	quotedBody := buildQuotedReply(opts)
-	fullBody := opts.Body + "\n\n" + quotedBody
-
-	return c.Send(SendOptions{
-		To:      to,
-		Cc:      cc,
-		Subject: subject,
-		Body:    fullBody,
-	})
+	jsonBody, _ := json.Marshal(body)
+	_, err := c.doRequest("POST", endpoint, jsonBody)
+	return err
 }
 
-// Forward forwards an email
-func (c *GraphClient) Forward(opts ForwardOptions) error {
-	subject := opts.OriginalSubject
-	if !strings.HasPrefix(strings.ToLower(subject), "fwd:") && !strings.HasPrefix(strings.ToLower(subject), "fw:") {
-		subject = "Fwd: " + subject
+// Forward forwards an email using native Graph API
+func (c *GraphClient) Forward(messageID string, to []string, comment string) error {
+	endpoint := fmt.Sprintf("%s/me/messages/%s/forward", GraphAPIBaseURL, messageID)
+
+	toRecipients := make([]GraphEmailAddressWrapper, len(to))
+	for i, addr := range to {
+		toRecipients[i] = GraphEmailAddressWrapper{
+			EmailAddress: GraphEmailAddress{Address: ParseEmail(addr)},
+		}
 	}
 
-	forwardedBody := buildForwardedMessage(opts)
-	fullBody := opts.Body
-	if fullBody != "" {
-		fullBody += "\n\n"
+	body := map[string]interface{}{
+		"toRecipients": toRecipients,
 	}
-	fullBody += forwardedBody
+	if comment != "" {
+		body["comment"] = comment
+	}
 
-	return c.Send(SendOptions{
-		To:      opts.To,
-		Subject: subject,
-		Body:    fullBody,
-	})
+	jsonBody, _ := json.Marshal(body)
+	_, err := c.doRequest("POST", endpoint, jsonBody)
+	return err
 }
 
 // SaveDraft saves an email as draft and returns the draft ID
@@ -803,38 +773,3 @@ func ParseEmail(addr string) string {
 	return addr
 }
 
-// buildQuotedReply creates a quoted reply body
-func buildQuotedReply(opts ReplyOptions) string {
-	var sb strings.Builder
-	sb.WriteString("-------- Original Message --------\n")
-	sb.WriteString(fmt.Sprintf("From: %s\n", opts.OriginalFrom))
-	sb.WriteString(fmt.Sprintf("Date: %s\n", opts.OriginalDate.Format("Mon, 02 Jan 2006 15:04:05 -0700")))
-	sb.WriteString(fmt.Sprintf("Subject: %s\n", opts.OriginalSubject))
-	if len(opts.OriginalTo) > 0 {
-		sb.WriteString(fmt.Sprintf("To: %s\n", strings.Join(opts.OriginalTo, ", ")))
-	}
-	sb.WriteString("\n")
-
-	// Quote original body
-	for _, line := range strings.Split(opts.OriginalBody, "\n") {
-		sb.WriteString("> " + line + "\n")
-	}
-
-	return sb.String()
-}
-
-// buildForwardedMessage creates a forwarded message body
-func buildForwardedMessage(opts ForwardOptions) string {
-	var sb strings.Builder
-	sb.WriteString("-------- Forwarded Message --------\n")
-	sb.WriteString(fmt.Sprintf("From: %s\n", opts.OriginalFrom))
-	sb.WriteString(fmt.Sprintf("Date: %s\n", opts.OriginalDate.Format("Mon, 02 Jan 2006 15:04:05 -0700")))
-	sb.WriteString(fmt.Sprintf("Subject: %s\n", opts.OriginalSubject))
-	if len(opts.OriginalTo) > 0 {
-		sb.WriteString(fmt.Sprintf("To: %s\n", strings.Join(opts.OriginalTo, ", ")))
-	}
-	sb.WriteString("\n")
-	sb.WriteString(opts.OriginalBody)
-
-	return sb.String()
-}

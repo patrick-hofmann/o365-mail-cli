@@ -670,17 +670,13 @@ func runReply(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	messageID := args[0]
 
-	body := replyBody
+	comment := replyBody
 	if replyBodyFile != "" {
 		content, err := os.ReadFile(replyBodyFile)
 		if err != nil {
 			return fmt.Errorf("could not read body file: %w", err)
 		}
-		body = string(content)
-	}
-
-	if body == "" {
-		return fmt.Errorf("reply body required (--body or --body-file)")
+		comment = string(content)
 	}
 
 	client, err := getGraphClient(ctx)
@@ -688,36 +684,16 @@ func runReply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	folderID, err := client.GetFolderByName(replyFolder)
-	if err != nil {
-		return err
-	}
-
-	originalEmail, err := client.GetEmail(folderID, messageID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch original email: %w", err)
-	}
-
 	debugLog("Sending reply via Microsoft Graph API")
 
-	opts := mail.ReplyOptions{
-		OriginalFrom:    originalEmail.From,
-		OriginalTo:      originalEmail.To,
-		OriginalSubject: originalEmail.Subject,
-		OriginalDate:    originalEmail.Date,
-		OriginalBody:    originalEmail.Body,
-		Body:            body,
-		ReplyAll:        replyAll,
-	}
-
-	if err := client.Reply(opts); err != nil {
+	if err := client.Reply(messageID, comment, replyAll); err != nil {
 		return fmt.Errorf("reply failed: %w", err)
 	}
 
 	if replyAll {
 		printSuccess("Reply-all sent")
 	} else {
-		printSuccess("Reply sent to %s", originalEmail.From)
+		printSuccess("Reply sent")
 	}
 
 	return nil
@@ -731,13 +707,13 @@ func runForward(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one recipient (--to) required")
 	}
 
-	body := forwardBody
+	comment := forwardBody
 	if forwardBodyFile != "" {
 		content, err := os.ReadFile(forwardBodyFile)
 		if err != nil {
 			return fmt.Errorf("could not read body file: %w", err)
 		}
-		body = string(content)
+		comment = string(content)
 	}
 
 	client, err := getGraphClient(ctx)
@@ -745,29 +721,9 @@ func runForward(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	folderID, err := client.GetFolderByName(forwardFolder)
-	if err != nil {
-		return err
-	}
-
-	originalEmail, err := client.GetEmail(folderID, messageID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch original email: %w", err)
-	}
-
 	debugLog("Forwarding email via Microsoft Graph API")
 
-	opts := mail.ForwardOptions{
-		OriginalFrom:    originalEmail.From,
-		OriginalTo:      originalEmail.To,
-		OriginalSubject: originalEmail.Subject,
-		OriginalDate:    originalEmail.Date,
-		OriginalBody:    originalEmail.Body,
-		To:              forwardTo,
-		Body:            body,
-	}
-
-	if err := client.Forward(opts); err != nil {
+	if err := client.Forward(messageID, forwardTo, comment); err != nil {
 		return fmt.Errorf("forward failed: %w", err)
 	}
 
