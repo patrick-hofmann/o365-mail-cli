@@ -96,7 +96,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("o365-mail-cli v1.0.0")
+		fmt.Println("o365-mail-cli v1.2.0")
 	},
 }
 

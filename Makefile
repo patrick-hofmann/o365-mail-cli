@@ -2,7 +2,7 @@
 # Cross-Platform Build Support
 
 BINARY_NAME=o365-mail-cli
-VERSION=1.0.0
+VERSION=1.2.0
 BUILD_DIR=dist
 MAIN_PATH=./cmd/o365-mail-cli
 
