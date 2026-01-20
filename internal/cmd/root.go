@@ -64,6 +64,7 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(mailCmd)
 	rootCmd.AddCommand(foldersCmd)
+	rootCmd.AddCommand(rulesCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -226,6 +226,26 @@ Examples:
 	RunE: runForward,
 }
 
+// Archive-from Command
+var (
+	archiveFromFolder string
+	archiveFromDryRun bool
+)
+
+var archiveFromCmd = &cobra.Command{
+	Use:   "archive-from [email-address...]",
+	Short: "Archive all emails from specific sender(s)",
+	Long: `Archives all emails from one or more exact email addresses.
+Uses exact matching on the sender's email address.
+
+Examples:
+  o365-mail-cli mail archive-from notifications@example.com
+  o365-mail-cli mail archive-from noreply@service.com alerts@monitor.com
+  o365-mail-cli mail archive-from spam@example.com --dry-run`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runArchiveFrom,
+}
+
 func init() {
 	// List flags
 	mailListCmd.Flags().StringVar(&listFolder, "folder", "inbox", "Folder to read from")
@@ -288,6 +308,10 @@ func init() {
 	forwardCmd.Flags().StringVar(&forwardBodyFile, "body-file", "", "Read additional body from file")
 	forwardCmd.MarkFlagRequired("to")
 
+	// Archive-from flags
+	archiveFromCmd.Flags().StringVar(&archiveFromFolder, "folder", "inbox", "Folder to search in")
+	archiveFromCmd.Flags().BoolVar(&archiveFromDryRun, "dry-run", false, "Show what would be archived without actually moving")
+
 	mailCmd.AddCommand(mailListCmd)
 	mailCmd.AddCommand(readCmd)
 	mailCmd.AddCommand(sendCmd)
@@ -299,6 +323,7 @@ func init() {
 	mailCmd.AddCommand(attachmentsCmd)
 	mailCmd.AddCommand(replyCmd)
 	mailCmd.AddCommand(forwardCmd)
+	mailCmd.AddCommand(archiveFromCmd)
 }
 
 // getGraphClient creates a Graph API client with authentication
@@ -782,4 +807,62 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func runArchiveFrom(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+	senderAddresses := args
+
+	client, err := getGraphClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	srcFolderID, err := client.GetFolderByName(archiveFromFolder)
+	if err != nil {
+		return err
+	}
+
+	debugLog("Searching for emails from: %s", strings.Join(senderAddresses, ", "))
+
+	// Find all emails from the specified senders (no limit - get all)
+	emails, err := client.ListEmailsFromSenders(srcFolderID, senderAddresses, 0)
+	if err != nil {
+		return fmt.Errorf("failed to list emails: %w", err)
+	}
+
+	if len(emails) == 0 {
+		printInfo("No emails found from the specified sender(s)")
+		return nil
+	}
+
+	fmt.Printf("Found %d email(s) from: %s\n", len(emails), strings.Join(senderAddresses, ", "))
+
+	if archiveFromDryRun {
+		fmt.Println("\nDry run - would archive:")
+		for _, email := range emails {
+			date := email.Date.Local().Format("2006-01-02")
+			fmt.Printf("  • [%s] %s - %s\n", date, truncate(email.From, 30), truncate(email.Subject, 40))
+		}
+		return nil
+	}
+
+	// Get archive folder ID
+	archiveFolderID, err := client.GetFolderByName("Archive")
+	if err != nil {
+		return fmt.Errorf("failed to get Archive folder: %w", err)
+	}
+
+	// Move each email to archive
+	archived := 0
+	for _, email := range emails {
+		if err := client.MoveEmail(srcFolderID, email.MessageID, archiveFolderID); err != nil {
+			fmt.Printf("✗ Failed to archive: %s\n", truncate(email.Subject, 50))
+			continue
+		}
+		archived++
+	}
+
+	printSuccess("Archived %d email(s) from %s", archived, strings.Join(senderAddresses, ", "))
+	return nil
 }

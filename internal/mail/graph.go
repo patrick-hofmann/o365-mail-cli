@@ -251,6 +251,60 @@ func (c *GraphClient) TrashEmail(folderID string, messageID string) error {
 	return c.MoveEmail(folderID, messageID, "deleteditems")
 }
 
+// ListEmailsFromSenders lists all emails from specific sender addresses (exact match)
+// It handles pagination to return all matching emails
+// Due to Graph API limitations on complex filters, this fetches all emails and filters in code
+func (c *GraphClient) ListEmailsFromSenders(folderID string, senderAddresses []string, limit int) ([]Email, error) {
+	if len(senderAddresses) == 0 {
+		return nil, fmt.Errorf("at least one sender address required")
+	}
+
+	// Normalize addresses to lowercase for comparison
+	normalizedAddrs := make(map[string]bool)
+	for _, addr := range senderAddresses {
+		normalizedAddrs[strings.ToLower(addr)] = true
+	}
+
+	var allEmails []Email
+	endpoint := fmt.Sprintf("%s/me/mailFolders/%s/messages", GraphAPIBaseURL, url.PathEscape(folderID))
+
+	params := url.Values{}
+	params.Set("$top", "100") // Fetch in batches of 100
+	params.Set("$orderby", "receivedDateTime desc")
+	params.Set("$select", "id,subject,bodyPreview,receivedDateTime,isRead,from,toRecipients,hasAttachments,internetMessageId")
+
+	currentEndpoint := endpoint + "?" + params.Encode()
+
+	for currentEndpoint != "" {
+		resp, err := c.doRequest("GET", currentEndpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var result GraphMessagesResponse
+		if err := json.Unmarshal(resp, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		for _, msg := range result.Value {
+			// Exact match check: extract email address and compare
+			if msg.From != nil {
+				fromAddr := strings.ToLower(msg.From.EmailAddress.Address)
+				if normalizedAddrs[fromAddr] {
+					allEmails = append(allEmails, graphMessageToEmail(msg))
+					if limit > 0 && len(allEmails) >= limit {
+						return allEmails, nil
+					}
+				}
+			}
+		}
+
+		currentEndpoint = result.NextLink
+	}
+
+	return allEmails, nil
+}
+
 // SearchEmails searches emails by criteria
 func (c *GraphClient) SearchEmails(folderID string, from, subject string, since time.Time, limit int) ([]Email, error) {
 	endpoint := fmt.Sprintf("%s/me/mailFolders/%s/messages", GraphAPIBaseURL, url.PathEscape(folderID))
