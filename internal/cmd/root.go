@@ -6,13 +6,16 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yourname/o365-mail-cli/internal/config"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var (
-	cfg         *config.Config
-	cfgFile     string
-	debug       bool
-	accountFlag string
+	cfg           *config.Config
+	cfgFile       string
+	debug         bool
+	accountFlag   string
+	profileFlag   string
+	activeProfile *profile.Profile
 )
 
 // rootCmd is the base command
@@ -45,6 +48,16 @@ Examples:
 			cfg.Debug = true
 		}
 
+		// Resolve and check permission profile
+		activeProfile, err = profile.ResolveProfile(profileFlag)
+		if err != nil {
+			return fmt.Errorf("failed to load profile: %w", err)
+		}
+
+		if err := profile.CheckCommand(activeProfile, cmd); err != nil {
+			return err
+		}
+
 		return nil
 	},
 }
@@ -59,6 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default: ~/.o365-mail-cli/config.yaml)")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug output")
 	rootCmd.PersistentFlags().StringVar(&accountFlag, "account", "", "Account to use (email address)")
+	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Permission profile to use")
 
 	// Add subcommands
 	rootCmd.AddCommand(authCmd)

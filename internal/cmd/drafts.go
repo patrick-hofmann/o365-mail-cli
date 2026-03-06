@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var draftsCmd = &cobra.Command{
@@ -34,7 +35,8 @@ var draftCreateCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail drafts create --to user@example.com --subject "Test" --body "Hello!"
   o365-mail-cli mail drafts create --to user@example.com --subject "Report" --body-file draft.txt`,
-	RunE: runDraftCreate,
+	Annotations: map[string]string{profile.AnnotationKey: "drafts.create"},
+	RunE:        runDraftCreate,
 }
 
 // Draft list command
@@ -48,7 +50,8 @@ var draftListCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail drafts list
   o365-mail-cli mail drafts list --json`,
-	RunE: runDraftList,
+	Annotations: map[string]string{profile.AnnotationKey: "drafts.list"},
+	RunE:        runDraftList,
 }
 
 // Draft send command
@@ -59,8 +62,9 @@ var draftSendCmd = &cobra.Command{
 
 Examples:
   o365-mail-cli mail drafts send AAMkAGI2...`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDraftSend,
+	Annotations: map[string]string{profile.AnnotationKey: "drafts.send"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runDraftSend,
 }
 
 // Draft delete command
@@ -71,8 +75,9 @@ var draftDeleteCmd = &cobra.Command{
 
 Examples:
   o365-mail-cli mail drafts delete AAMkAGI2...`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDraftDelete,
+	Annotations: map[string]string{profile.AnnotationKey: "drafts.delete"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runDraftDelete,
 }
 
 func init() {

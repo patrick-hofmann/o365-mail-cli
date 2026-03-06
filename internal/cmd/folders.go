@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var foldersCmd = &cobra.Command{
@@ -15,9 +16,10 @@ var foldersCmd = &cobra.Command{
 }
 
 var foldersListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all folders",
-	RunE:  runFoldersList,
+	Use:         "list",
+	Short:       "List all folders",
+	Annotations: map[string]string{profile.AnnotationKey: "folders.read"},
+	RunE:        runFoldersList,
 }
 
 var foldersCreateCmd = &cobra.Command{
@@ -28,8 +30,9 @@ var foldersCreateCmd = &cobra.Command{
 Examples:
   o365-mail-cli folders create "Archive"
   o365-mail-cli folders create "Projects"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runFoldersCreate,
+	Annotations: map[string]string{profile.AnnotationKey: "folders.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runFoldersCreate,
 }
 
 var foldersDeleteCmd = &cobra.Command{
@@ -41,8 +44,9 @@ Warning: All emails in the folder will be deleted!
 
 Examples:
   o365-mail-cli folders delete "Old Folder"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runFoldersDelete,
+	Annotations: map[string]string{profile.AnnotationKey: "folders.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runFoldersDelete,
 }
 
 func init() {

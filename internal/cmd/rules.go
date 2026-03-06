@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yourname/o365-mail-cli/internal/mail"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var rulesCmd = &cobra.Command{
@@ -28,7 +29,8 @@ var rulesListCmd = &cobra.Command{
 Examples:
   o365-mail-cli rules list
   o365-mail-cli rules list --json`,
-	RunE: runRulesList,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.read"},
+	RunE:        runRulesList,
 }
 
 // Get Command
@@ -42,8 +44,9 @@ var rulesGetCmd = &cobra.Command{
 Examples:
   o365-mail-cli rules get AQMkADAwATM0...
   o365-mail-cli rules get AQMkADAwATM0... --json`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRulesGet,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.read"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRulesGet,
 }
 
 // Create Command
@@ -90,7 +93,8 @@ Examples:
   o365-mail-cli rules create --name "Forward important" \
     --subject-contains "urgent" \
     --forward-to manager@example.com`,
-	RunE: runRulesCreate,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.manage"},
+	RunE:        runRulesCreate,
 }
 
 // Update Command
@@ -108,8 +112,9 @@ var rulesUpdateCmd = &cobra.Command{
 Examples:
   o365-mail-cli rules update AQMkADAwATM0... --name "New name"
   o365-mail-cli rules update AQMkADAwATM0... --json-file updates.json`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRulesUpdate,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRulesUpdate,
 }
 
 // Delete Command
@@ -120,8 +125,9 @@ var rulesDeleteCmd = &cobra.Command{
 
 Examples:
   o365-mail-cli rules delete AQMkADAwATM0...`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRulesDelete,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRulesDelete,
 }
 
 // Enable Command
@@ -132,8 +138,9 @@ var rulesEnableCmd = &cobra.Command{
 
 Examples:
   o365-mail-cli rules enable AQMkADAwATM0...`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRulesEnable,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRulesEnable,
 }
 
 // Disable Command
@@ -144,8 +151,9 @@ var rulesDisableCmd = &cobra.Command{
 
 Examples:
   o365-mail-cli rules disable AQMkADAwATM0...`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRulesDisable,
+	Annotations: map[string]string{profile.AnnotationKey: "rules.manage"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRulesDisable,
 }
 
 func init() {

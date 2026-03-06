@@ -1,0 +1,13 @@
+# Email assistant profile: can read, modify status, create drafts, but not send or delete.
+# Use enforce: true to prevent the agent from bypassing this profile.
+description: "Email assistant with restricted access"
+enforce: true
+allow:
+  - mail.read
+  - mail.modify
+  - drafts.create
+  - drafts.list
+  - folders.read
+  - rules.read
+  - config.read
+  - auth

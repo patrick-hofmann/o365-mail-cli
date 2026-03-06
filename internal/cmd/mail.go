@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yourname/o365-mail-cli/internal/auth"
 	"github.com/yourname/o365-mail-cli/internal/mail"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var mailCmd = &cobra.Command{
@@ -37,7 +38,8 @@ Examples:
   o365-mail-cli mail list --folder "Sent Items" --limit 20
   o365-mail-cli mail list --unread
   o365-mail-cli mail list --json`,
-	RunE: runMailList,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.read"},
+	RunE:        runMailList,
 }
 
 // Read Command
@@ -53,8 +55,9 @@ Find the message ID in the output of 'mail list --json'.
 Examples:
   o365-mail-cli mail read AAMkAGI2...
   o365-mail-cli mail read AAMkAGI2... --folder "Sent Items"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRead,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.read"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runRead,
 }
 
 // Send Command
@@ -77,7 +80,8 @@ Examples:
   o365-mail-cli mail send --to user@example.com --subject "Test" --body "Hello!"
   o365-mail-cli mail send --to user@example.com --subject "Report" --body-file report.txt
   o365-mail-cli mail send --to user@example.com --cc boss@example.com --subject "Info" --body "Text"`,
-	RunE: runSend,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.send"},
+	RunE:        runSend,
 }
 
 // Mark-read Command
@@ -91,8 +95,9 @@ var markReadCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail mark-read AAMkAGI2...
   o365-mail-cli mail mark-read AAMkAGI2... --folder "Archive"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runMarkRead,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.modify"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runMarkRead,
 }
 
 // Mark-unread Command
@@ -106,8 +111,9 @@ var markUnreadCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail mark-unread AAMkAGI2...
   o365-mail-cli mail mark-unread AAMkAGI2... --folder "Archive"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runMarkUnread,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.modify"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runMarkUnread,
 }
 
 // Move Command
@@ -124,8 +130,9 @@ var moveCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail move AAMkAGI2... --to "Archive"
   o365-mail-cli mail move AAMkAGI2... --folder "Sent Items" --to "Archive"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runMove,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.move"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runMove,
 }
 
 // Trash Command
@@ -140,8 +147,9 @@ This is a safe delete - the email can be recovered from Trash.
 Examples:
   o365-mail-cli mail trash AAMkAGI2...
   o365-mail-cli mail trash AAMkAGI2... --folder "Spam"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runTrash,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.delete"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runTrash,
 }
 
 // Search Command
@@ -164,7 +172,8 @@ Examples:
   o365-mail-cli mail search --subject "important"
   o365-mail-cli mail search --since 24h
   o365-mail-cli mail search --from "boss@company.com" --since 7d --json`,
-	RunE: runSearch,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.read"},
+	RunE:        runSearch,
 }
 
 // Attachments Command
@@ -181,8 +190,9 @@ var attachmentsCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail attachments AAMkAGI2... --save-to ./downloads
   o365-mail-cli mail attachments AAMkAGI2... --folder "Sent Items" --save-to /tmp/attachments`,
-	Args: cobra.ExactArgs(1),
-	RunE: runAttachments,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.read"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runAttachments,
 }
 
 // Reply Command
@@ -202,8 +212,9 @@ Examples:
   o365-mail-cli mail reply AAMkAGI2... --body "Thank you for your email!"
   o365-mail-cli mail reply AAMkAGI2... --body-file response.txt
   o365-mail-cli mail reply AAMkAGI2... --body "Thanks!" --reply-all`,
-	Args: cobra.ExactArgs(1),
-	RunE: runReply,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.send"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runReply,
 }
 
 // Forward Command
@@ -222,8 +233,9 @@ var forwardCmd = &cobra.Command{
 Examples:
   o365-mail-cli mail forward AAMkAGI2... --to colleague@example.com
   o365-mail-cli mail forward AAMkAGI2... --to colleague@example.com --body "FYI - please review"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runForward,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.send"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runForward,
 }
 
 // Archive-from Command
@@ -242,8 +254,9 @@ Examples:
   o365-mail-cli mail archive-from notifications@example.com
   o365-mail-cli mail archive-from noreply@service.com alerts@monitor.com
   o365-mail-cli mail archive-from spam@example.com --dry-run`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: runArchiveFrom,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.move"},
+	Args:        cobra.MinimumNArgs(1),
+	RunE:        runArchiveFrom,
 }
 
 func init() {

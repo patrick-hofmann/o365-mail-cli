@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yourname/o365-mail-cli/internal/auth"
 	"github.com/yourname/o365-mail-cli/internal/config"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var logoutAll bool
@@ -27,7 +28,8 @@ var loginCmd = &cobra.Command{
 
 You will receive a code to enter in your browser at microsoft.com/devicelogin.
 After successful authentication, a token is stored locally.`,
-	RunE: runLogin,
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	RunE:        runLogin,
 }
 
 var logoutCmd = &cobra.Command{
@@ -42,20 +44,23 @@ Examples:
   o365-mail-cli auth logout
   o365-mail-cli auth logout user@example.com
   o365-mail-cli auth logout --all`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runLogout,
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	Args:        cobra.MaximumNArgs(1),
+	RunE:        runLogout,
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show current auth status",
-	RunE:  runStatus,
+	Use:         "status",
+	Short:       "Show current auth status",
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	RunE:        runStatus,
 }
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all logged-in accounts",
-	RunE:  runList,
+	Use:         "list",
+	Short:       "List all logged-in accounts",
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	RunE:        runList,
 }
 
 var switchCmd = &cobra.Command{
@@ -68,8 +73,9 @@ or O365_ACCOUNT environment variable is set.
 
 Examples:
   o365-mail-cli auth switch user@example.com`,
-	Args: cobra.ExactArgs(1),
-	RunE: runSwitch,
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runSwitch,
 }
 
 var debugCmd = &cobra.Command{
@@ -85,8 +91,9 @@ Without argument, debugs the active account.
 Examples:
   o365-mail-cli auth debug
   o365-mail-cli auth debug user@example.com`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runDebug,
+	Annotations: map[string]string{profile.AnnotationKey: "auth"},
+	Args:        cobra.MaximumNArgs(1),
+	RunE:        runDebug,
 }
 
 func init() {

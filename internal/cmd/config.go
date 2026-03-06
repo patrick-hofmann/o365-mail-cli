@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yourname/o365-mail-cli/internal/config"
+	"github.com/yourname/o365-mail-cli/internal/profile"
 )
 
 var configCmd = &cobra.Command{
@@ -14,9 +15,10 @@ var configCmd = &cobra.Command{
 }
 
 var configShowCmd = &cobra.Command{
-	Use:   "show",
-	Short: "Show current configuration",
-	RunE:  runConfigShow,
+	Use:         "show",
+	Short:       "Show current configuration",
+	Annotations: map[string]string{profile.AnnotationKey: "config.read"},
+	RunE:        runConfigShow,
 }
 
 var configSetCmd = &cobra.Command{
@@ -33,21 +35,24 @@ Available keys:
 Examples:
   o365-mail-cli config set client_id "your-client-id"
   o365-mail-cli config set current_account "user@example.com"`,
-	Args: cobra.ExactArgs(2),
-	RunE: runConfigSet,
+	Annotations: map[string]string{profile.AnnotationKey: "config.write"},
+	Args:        cobra.ExactArgs(2),
+	RunE:        runConfigSet,
 }
 
 var configGetCmd = &cobra.Command{
-	Use:   "get [key]",
-	Short: "Get configuration value",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runConfigGet,
+	Use:         "get [key]",
+	Short:       "Get configuration value",
+	Annotations: map[string]string{profile.AnnotationKey: "config.read"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runConfigGet,
 }
 
 var configPathCmd = &cobra.Command{
-	Use:   "path",
-	Short: "Show config file path",
-	Run:   runConfigPath,
+	Use:         "path",
+	Short:       "Show config file path",
+	Annotations: map[string]string{profile.AnnotationKey: "config.read"},
+	Run:         runConfigPath,
 }
 
 func init() {
