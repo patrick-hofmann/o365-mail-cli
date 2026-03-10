@@ -176,6 +176,36 @@ Examples:
 	RunE:        runSearch,
 }
 
+// Query Command
+var (
+	queryFolder string
+	queryLimit  int
+	queryJSON   bool
+)
+
+var queryCmd = &cobra.Command{
+	Use:   "query [search-text]",
+	Short: "Full-text search emails using KQL",
+	Long: `Searches emails using KQL (Keyword Query Language) via the Exchange search index.
+Supports full-text search across subject, body, and other fields.
+
+KQL examples:
+  Simple keyword:         test
+  Phrase:                 "quarterly report"
+  Specific field:         from:sender@example.com
+  Multiple fields:        from:boss@company.com subject:urgent
+  Boolean:                budget AND 2024
+
+Examples:
+  o365-mail-cli mail query "test"
+  o365-mail-cli mail query "from:sender@example.com"
+  o365-mail-cli mail query "subject:urgent" --folder all
+  o365-mail-cli mail query "quarterly report" --limit 20 --json`,
+	Annotations: map[string]string{profile.AnnotationKey: "mail.read"},
+	Args:        cobra.ExactArgs(1),
+	RunE:        runQuery,
+}
+
 // Attachments Command
 var (
 	attachFolder string
@@ -321,6 +351,11 @@ func init() {
 	forwardCmd.Flags().StringVar(&forwardBodyFile, "body-file", "", "Read additional body from file")
 	forwardCmd.MarkFlagRequired("to")
 
+	// Query flags
+	queryCmd.Flags().StringVar(&queryFolder, "folder", "inbox", "Folder to search (use \"all\" for all folders)")
+	queryCmd.Flags().IntVar(&queryLimit, "limit", 50, "Maximum results")
+	queryCmd.Flags().BoolVar(&queryJSON, "json", false, "Output as JSON")
+
 	// Archive-from flags
 	archiveFromCmd.Flags().StringVar(&archiveFromFolder, "folder", "inbox", "Folder to search in")
 	archiveFromCmd.Flags().BoolVar(&archiveFromDryRun, "dry-run", false, "Show what would be archived without actually moving")
@@ -336,6 +371,7 @@ func init() {
 	mailCmd.AddCommand(attachmentsCmd)
 	mailCmd.AddCommand(replyCmd)
 	mailCmd.AddCommand(forwardCmd)
+	mailCmd.AddCommand(queryCmd)
 	mailCmd.AddCommand(archiveFromCmd)
 }
 
@@ -622,6 +658,61 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	if len(emails) == 0 {
 		printInfo("No emails found matching criteria.")
+		return nil
+	}
+
+	fmt.Printf("\n%-40s %-20s %-25s %s\n", "ID", "Date", "From", "Subject")
+	fmt.Println(strings.Repeat("─", 110))
+
+	for _, email := range emails {
+		unreadMarker := " "
+		if email.Unread {
+			unreadMarker = "●"
+		}
+
+		id := truncate(email.MessageID, 38)
+		from := truncate(email.From, 23)
+		subject := truncate(email.Subject, 30)
+		date := email.Date.Local().Format("2006-01-02 15:04")
+
+		fmt.Printf("%s %-39s %-20s %-25s %s\n", unreadMarker, id, date, from, subject)
+	}
+
+	fmt.Printf("\n%d emails found\n", len(emails))
+
+	return nil
+}
+
+func runQuery(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+	query := args[0]
+
+	client, err := getGraphClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	var folderID string
+	if strings.ToLower(queryFolder) != "all" {
+		folderID, err = client.GetFolderByName(queryFolder)
+		if err != nil {
+			return err
+		}
+	}
+
+	debugLog("Searching emails via KQL: %s", query)
+
+	emails, err := client.SearchEmailsKQL(folderID, query, queryLimit)
+	if err != nil {
+		return err
+	}
+
+	if queryJSON {
+		return outputJSON(emails)
+	}
+
+	if len(emails) == 0 {
+		printInfo("No emails found matching query.")
 		return nil
 	}
 

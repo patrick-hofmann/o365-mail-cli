@@ -142,8 +142,12 @@ func (c *GraphClient) ListEmails(folderID string, limit int, unreadOnly bool) ([
 	endpoint := fmt.Sprintf("%s/me/mailFolders/%s/messages", GraphAPIBaseURL, url.PathEscape(folderID))
 
 	// Build query parameters
+	pageSize := limit
+	if pageSize > 100 {
+		pageSize = 100
+	}
 	params := url.Values{}
-	params.Set("$top", fmt.Sprintf("%d", limit))
+	params.Set("$top", fmt.Sprintf("%d", pageSize))
 	params.Set("$orderby", "receivedDateTime desc")
 	params.Set("$select", "id,subject,bodyPreview,receivedDateTime,isRead,from,toRecipients,hasAttachments,internetMessageId")
 
@@ -151,24 +155,31 @@ func (c *GraphClient) ListEmails(folderID string, limit int, unreadOnly bool) ([
 		params.Set("$filter", "isRead eq false")
 	}
 
-	endpoint += "?" + params.Encode()
+	var allEmails []Email
+	currentEndpoint := endpoint + "?" + params.Encode()
 
-	resp, err := c.doRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, err
+	for currentEndpoint != "" {
+		resp, err := c.doRequest("GET", currentEndpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var result GraphMessagesResponse
+		if err := json.Unmarshal(resp, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		for _, msg := range result.Value {
+			allEmails = append(allEmails, graphMessageToEmail(msg))
+			if len(allEmails) >= limit {
+				return allEmails, nil
+			}
+		}
+
+		currentEndpoint = result.NextLink
 	}
 
-	var result GraphMessagesResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	emails := make([]Email, len(result.Value))
-	for i, msg := range result.Value {
-		emails[i] = graphMessageToEmail(msg)
-	}
-
-	return emails, nil
+	return allEmails, nil
 }
 
 // GetEmail fetches a single email with full body
@@ -287,8 +298,12 @@ func (c *GraphClient) ListEmailsFromSenders(folderID string, senderAddresses []s
 func (c *GraphClient) SearchEmails(folderID string, from, subject string, since time.Time, limit int) ([]Email, error) {
 	endpoint := fmt.Sprintf("%s/me/mailFolders/%s/messages", GraphAPIBaseURL, url.PathEscape(folderID))
 
+	pageSize := limit
+	if pageSize > 100 {
+		pageSize = 100
+	}
 	params := url.Values{}
-	params.Set("$top", fmt.Sprintf("%d", limit))
+	params.Set("$top", fmt.Sprintf("%d", pageSize))
 	params.Set("$orderby", "receivedDateTime desc")
 	params.Set("$select", "id,subject,bodyPreview,receivedDateTime,isRead,from,toRecipients,hasAttachments,internetMessageId")
 
@@ -308,24 +323,76 @@ func (c *GraphClient) SearchEmails(folderID string, from, subject string, since 
 		params.Set("$filter", strings.Join(filters, " and "))
 	}
 
-	endpoint += "?" + params.Encode()
+	var allEmails []Email
+	currentEndpoint := endpoint + "?" + params.Encode()
 
-	resp, err := c.doRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, err
+	for currentEndpoint != "" {
+		resp, err := c.doRequest("GET", currentEndpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var result GraphMessagesResponse
+		if err := json.Unmarshal(resp, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		for _, msg := range result.Value {
+			allEmails = append(allEmails, graphMessageToEmail(msg))
+			if len(allEmails) >= limit {
+				return allEmails, nil
+			}
+		}
+
+		currentEndpoint = result.NextLink
 	}
 
-	var result GraphMessagesResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	return allEmails, nil
+}
+
+// SearchEmailsKQL searches emails using KQL (Keyword Query Language) via the $search parameter
+func (c *GraphClient) SearchEmailsKQL(folderID, query string, limit int) ([]Email, error) {
+	var endpoint string
+	if folderID == "" {
+		endpoint = fmt.Sprintf("%s/me/messages", GraphAPIBaseURL)
+	} else {
+		endpoint = fmt.Sprintf("%s/me/mailFolders/%s/messages", GraphAPIBaseURL, url.PathEscape(folderID))
 	}
 
-	emails := make([]Email, len(result.Value))
-	for i, msg := range result.Value {
-		emails[i] = graphMessageToEmail(msg)
+	pageSize := limit
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	params := url.Values{}
+	params.Set("$top", fmt.Sprintf("%d", pageSize))
+	params.Set("$search", fmt.Sprintf("%q", query))
+	params.Set("$select", "id,subject,bodyPreview,receivedDateTime,isRead,from,toRecipients,hasAttachments,internetMessageId")
+
+	var allEmails []Email
+	currentEndpoint := endpoint + "?" + params.Encode()
+
+	for currentEndpoint != "" {
+		resp, err := c.doRequest("GET", currentEndpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var result GraphMessagesResponse
+		if err := json.Unmarshal(resp, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		for _, msg := range result.Value {
+			allEmails = append(allEmails, graphMessageToEmail(msg))
+			if len(allEmails) >= limit {
+				return allEmails, nil
+			}
+		}
+
+		currentEndpoint = result.NextLink
 	}
 
-	return emails, nil
+	return allEmails, nil
 }
 
 // GetAttachments downloads attachments from an email
